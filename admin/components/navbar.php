@@ -68,6 +68,14 @@
             <li class="nav-item <?= ($current_page == 'riwayat.php') ? 'active' : '' ?>">
                 <a href="riwayat.php"><i class="ft-clock"></i><span class="menu-title">History Pembelian</span></a>
             </li> 
+            <li class="nav-item <?= ($current_page == 'scan.php') ? 'active' : '' ?>">
+    <a href="scan.php"><i class="ft-camera"></i><span class="menu-title">Scan Tiket</span></a>
+</li>
+
+<li class="nav-item <?= ($current_page == 'logout.php') ? 'active' : '' ?>">
+    <a href="logout.php"><i class="ft-log-out"></i><span class="menu-title">Logout</span></a>
+</li>
+
         </ul>
     </div>
 

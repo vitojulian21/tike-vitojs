@@ -1,81 +1,82 @@
 <?php
-// Menyertakan autoloader Composer
-require 'vendor/autoload.php'; // Pastikan pathnya sesuai dengan struktur project Anda
+require 'vendor/autoload.php'; // Pastikan path benar
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 session_start();
-// Inisialisasi variabel untuk menyimpan input
-$name = '';
-$email = '';
-$password = '';
+$alert_message = "";
+$alert_type = "";
 if (isset($_POST['send_otp'])) {
-    $name = $_POST['name'];
     $email = $_POST['email'];
-    $password = $_POST['password'];
-    // Simpan password di session
-    $_SESSION['password'] = $password;
-    // Generate OTP
-    $otp = rand(100000, 999999);
-    $_SESSION['otp'] = $otp;
     $_SESSION['email'] = $email;
-    $_SESSION['name'] = $name;
-    $_SESSION['otp_sent_time'] = time(); // Store the time OTP was sent
-    // Kirim email OTP
-    $mail = new PHPMailer(true);
-    try {
-        $mail->isSMTP();
-        $mail->Host = 'smtp.gmail.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'vitojulian38@gmail.com';
-        $mail->Password = 'kgod ffqj tbbs tbwm'; // Gunakan App Password jika 2FA aktif
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // Untuk port 465
-        $mail->Port = 465; // Port untuk SSL
-        $mail->setFrom('vitojulian38@gmail.com', 'tiket vitojs');
-        $mail->addAddress($email);
-        $mail->isHTML(true);
-        $mail->Subject = 'OTP Verifikasi Akun';
-        $mail->Body = "Hai $name, <br> Berikut adalah kode OTP Anda:
-<b>$otp</b>.<br>Kode ini berlaku selama 15 menit.";
-        $mail->send();
-        $otp_sent = true; // Set flag untuk menampilkan SweetAlert
-    } catch (Exception $e) {
-        echo "Gagal mengirim email: {$mail->ErrorInfo}";
+    $conn = new mysqli("localhost", "root", "", "db_bioskop_vito");
+    if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
+    }
+    $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $stmt->store_result();
+    if ($stmt->num_rows > 0) {
+        $otp = rand(100000, 999999);
+        $_SESSION['otp'] = $otp;
+        $_SESSION['otp_sent_time'] = time();
+        $mail = new PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host = 'smtp.gmail.com';
+            $mail->SMTPAuth = true;
+            $mail->Username = 'nurrishqi@gmail.com';
+            $mail->Password = 'hpqo lkuv jmcp ymqd';
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+            $mail->Port = 465;
+            $mail->setFrom('nurrishqi@gmail.com', 'tiket');
+            $mail->addAddress($email);
+            $mail->isHTML(true);
+            $mail->Subject = 'OTP Reset Password';
+            $mail->Body = "Kode OTP Anda: <b>$otp</b>. Berlaku selama 15
+menit.";
+            $mail->send();
+            $alert_message = "Kode OTP telah dikirim ke email Anda.";
+            $alert_type = "success";
+        } catch (Exception $e) {
+            $alert_message = "Gagal mengirim email: {$mail->ErrorInfo}";
+            $alert_type = "error";
+        }
+    } else {
+        $alert_message = "Email tidak ditemukan.";
+        $alert_type = "error";
     }
 }
 if (isset($_POST['verify_otp'])) {
     $otp_input = $_POST['otp'];
-    // Check if OTP is valid and not expired (15 minutes)
-    if ($otp_input == $_SESSION['otp'] && (time() - $_SESSION['otp_sent_time'] <
-        900)) {
-        // OTP valid, simpan data pengguna ke database
-        $name = $_SESSION['name'];
-        $email = $_SESSION['email'];
-        $password = password_hash($_SESSION['password'], PASSWORD_DEFAULT); //Hash password
-        // Koneksi ke database dan insert data pengguna
-        $conn = new mysqli("localhost", "root", "", "db_bioskop_vito");
-        if ($conn->connect_error) {
-            die("Connection failed: " . $conn->connect_error);
-        }
-        // Use prepared statement
-        $stmt = $conn->prepare("INSERT INTO users (name, email, password) VALUES
-(?, ?, ?)");
-        $stmt->bind_param("sss", $name, $email, $password);
-        if ($stmt->execute()) {
-            $registration_success = true; // Set flag untuk menampilkan SweetAlert
-            // Hapus session setelah verifikasi
-            unset($_SESSION['otp']);
-            unset($_SESSION['otp_sent_time']);
-            unset($_SESSION['password']); // Hapus password dari session
-        } else {
-            echo "Error: " . $stmt->error;
-        }
+    if ($otp_input == $_SESSION['otp'] && (time() - $_SESSION['otp_sent_time']
+        < 900)) {
+        $_SESSION['otp_verified'] = true;
     } else {
-        echo "OTP salah atau kadaluarsa.";
+        $alert_message = "OTP salah atau kadaluarsa.";
+        $alert_type = "error";
+    }
+}
+if (isset($_POST['reset_password']) && isset($_SESSION['otp_verified'])) {
+    $new_password = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
+    $email = $_SESSION['email'];
+    $conn = new mysqli("localhost", "root", "", "db_bioskop_vito");
+    if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
+    }
+    $stmt = $conn->prepare("UPDATE users SET password = ? WHERE email = ?");
+    $stmt->bind_param("ss", $new_password, $email);
+    if ($stmt->execute()) {
+        $alert_message = "Password berhasil direset.";
+        $alert_type = "success";
+        session_destroy();
+    } else {
+        $alert_message = "Gagal mereset password.";
+        $alert_type = "error";
     }
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -85,6 +86,7 @@ if (isset($_POST['verify_otp'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register</title>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="icon" type="image/png" href="img/logo_cinema.png" sizes="256x256">
     <style>
         body {
             background-color: #e9e9e9;
@@ -150,7 +152,7 @@ if (isset($_POST['verify_otp'])) {
             display: inline-block;
         }
 
-        .login-nav_item+.login-nav_item {
+        .login-nav__item+.login-nav__item {
             margin-left: 2.25rem;
         }
 
@@ -237,7 +239,7 @@ if (isset($_POST['verify_otp'])) {
             background-color: transparent;
         }
 
-        .login_input+.login_label {
+        .login__input+.login__label {
             margin-top: 1.5rem;
         }
 
@@ -286,67 +288,65 @@ if (isset($_POST['verify_otp'])) {
 </head>
 
 <body>
-    <div class="login-container">
-        <form action="register.php" method="post" class="form-login">
-            <ul class="login-nav">
-                <li class="login-nav__item ">
-                    <a href="login.php">Sign In</a>
-                </li>
-                <li class="login-nav__item active">
-                    <a href="register.php">Sign Up</a>
-                </li>
-            </ul>
-            <label for="login-input-user" class="login__label">
-                Username
-            </label>
-            <input id="login-input-user" class="login__input" type="text " name="name"
-                value="<?php echo htmlspecialchars($name); ?>" />
+<div class="login-container">
+    <!-- Tetap tampilkan menu Forget Password -->
+    <ul class="login-nav" style="position: relative; z-index: 1;">
+        <li class="login-nav__item">
+            <a href="forget.php">Forget Password</a>
+        </li>
+    </ul>
 
-            <label for="login-input-email" class="login__label">
-                Email
-            </label>
-            <input id="login-input-email" class="login__input" type="text " name="email"
-                value="<?php echo htmlspecialchars($email); ?>" />
-
-
-            <label for="login-input-password" class="login__label">
-                Password
-            </label>
-            <input id="login-input-password" class="login__input" type="password" name="password" />
-            <button class="login__submit" type="submit" name="send_otp">Kirim OTP</button>
+    <!-- Form Kirim OTP -->
+    <?php if (!isset($_SESSION['otp']) && !isset($_SESSION['otp_verified'])): ?>
+        <form method="POST" id="emailForm" class="form-login">
+            <label class="login__label">Email:</label>
+            <input type="email" class="login__input" name="email" placeholder="Masukkan Email Anda" required>
+            <button type="submit" name="send_otp" class="login__submit">Kirim OTP</button>
         </form>
-        <?php if (isset($_SESSION['otp'])): ?>
-            <form action="register.php" method="POST" class="form-login">
-                <label for="otp" class="login__label">Masukan OTP</label>
-                <input type="text" class="login__input" name="otp"
-                    required>
-                <button type="submit" name="verify_otp" class="login__submit">Verifikasi OTP</button>
-            </form>
-        <?php endif; ?>
+    <?php endif; ?>
+
+    <!-- Form Verifikasi OTP -->
+    <?php if (isset($_SESSION['otp']) && !isset($_SESSION['otp_verified'])): ?>
+        <form method="POST" class="form-login mt-3" id="otpForm">
+            <label class="login__label">Masukkan OTP:</label>
+            <input type="text" class="login__input" name="otp" required>
+            <button type="submit" name="verify_otp" class="login__submit">Verifikasi OTP</button>
+        </form>
+    <?php endif; ?>
+
+    <!-- Form Reset Password -->
+    <?php if (isset($_SESSION['otp_verified'])): ?>
+        <form method="POST" class="form-login mt-3" id="passwordForm">
+            <label class="login__label">Password Baru:</label>
+            <input type="password" class="login__input" name="new_password" required>
+            <button type="submit" name="reset_password" class="login__submit">Reset Password</button>
+        </form>
+    <?php endif; ?>
+     <!-- Tampilkan link login di bagian atas card -->
+     <div class="text-center mb-4" style="position: relative; z-index: 1;">
+        <p class="mb-0 text-white">Sudah punya akun? <a href="login.php" class="text-primary fw-bold">Login</a></p>
     </div>
+</div>
+
+
+    <!-- Script -->
+    <script src="assets/libs/jquery/dist/jquery.min.js"></script>
+    <script src="assets/libs/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
     <script>
-        // Menampilkan SweetAlert setelah mengirim OTP
-        <?php if (isset($otp_sent) && $otp_sent): ?>
+        <?php if (!empty($alert_message)): ?>
             Swal.fire({
-                title: 'OTP Terkirim!',
-                text: 'Kode OTP telah dikirim ke email Anda.',
-                icon: 'success',
-                confirmButtonText: 'OK'
-            });
-        <?php endif; ?>
-        // // Menampilkan SweetAlert setelah pendaftaran berhasil
-        <?php if (isset($registration_success) && $registration_success): ?>
-            Swal.fire({
-                title: 'Pendaftaran Berhasil!',
-                text: 'Anda telah berhasil mendaftar. Silakan masuk.',
-                icon: 'success',
-                confirmButtonText: 'OK'
+                title: "<?= $alert_type == 'success' ? 'Berhasil' : 'Gagal' ?>",
+                text: "<?= $alert_message ?>",
+                icon: "<?= $alert_type ?>",
+                confirmButtonText: "OK"
             }).then(() => {
-                // // Mengarahkan pengguna ke register.php setelah menekan OK
-                window.location.href = 'login.php'; // Ganti dengan path yang sesuai
+                window.location.href = 'forget.php';
             });
         <?php endif; ?>
     </script>
+
 </body>
 
 </html>
